@@ -5,6 +5,7 @@ import pandas as pd
 import mediapipe as mp
 from datetime import datetime
 import tempfile
+from moviepy.editor import VideoFileClip
 
 
 # ========================================================
@@ -137,28 +138,24 @@ if st.session_state.vista == "video":
             tmp.write(uploaded_video.read())
             video_path = tmp.name
 
-        cap = cv2.VideoCapture(video_path)
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        fps = cap.get(cv2.CAP_PROP_FPS)
+        # Cargar video con MoviePy
+        clip = VideoFileClip(video_path)
+        fps = clip.fps
+        total_frames = int(clip.duration * fps)
 
         results = []
         logs = ""
-        frame_id = 0
 
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
+        for frame_id, frame in enumerate(clip.iter_frames(), start=1):
 
-            frame_id += 1
             progress_bar.progress(frame_id / total_frames)
 
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            rgb = frame  # ya viene en RGB
+
             res = pose.process(rgb)
 
             Lcm, Rcm = None, None
 
-            
             if res.pose_landmarks:
                 L, R = calcular_pies(res.pose_landmarks.landmark, rgb.shape)
 
@@ -167,9 +164,12 @@ if st.session_state.vista == "video":
                 else:
                     px_to_cm = 0.1
 
-                if L: Lcm = L * px_to_cm
-                if R: Rcm = R * px_to_cm
+                if L:
+                    Lcm = L * px_to_cm
+                if R:
+                    Rcm = R * px_to_cm
 
+                # Dibujar pose
                 mp_drawing.draw_landmarks(rgb, res.pose_landmarks, mp_pose.POSE_CONNECTIONS)
 
             # ====================================================
@@ -223,8 +223,6 @@ if st.session_state.vista == "video":
                 "right_cm": Rcm
             })
 
-        cap.release()
-
         st.session_state.df_result = pd.DataFrame(results)
         st.session_state.vista = "resultados"
         st.rerun()
@@ -232,7 +230,7 @@ if st.session_state.vista == "video":
 
 
 # ========================================================
-#  RESULTADOS FINALES
+# RESULTADOS FINALES
 # ========================================================
 elif st.session_state.vista == "resultados":
 
